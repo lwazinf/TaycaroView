@@ -22,9 +22,11 @@ import {
   faCalendar,
   faEdit,
   faTrash,
-  faStar as faStarSolid
+  faStar as faStarSolid,
+  faExclamationTriangle
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
+import { faTelegram } from '@fortawesome/free-brands-svg-icons';
 import {
   selectedStudentForSidebarAtom,
   sidebarActiveTabAtom,
@@ -32,7 +34,8 @@ import {
   studentDocumentsAtom,
   studentPerformanceAtom,
   studentAttendanceHistoryAtom,
-  newStudentMessageAtom
+  newStudentMessageAtom,
+  StudentPerformance // Use the one from atoms
 } from '../../store/studentsAtoms';
 import { 
   loadStudentDocuments,
@@ -46,8 +49,19 @@ import {
   toggleDocumentStar
 } from '../../services/documentsService';
 import { getStudentInitials, getAvatarColor, formatFileSize } from '../../utils/helpers';
-import { NURSING_LEVELS, CATEGORIES, StudentDocument } from '../../types';
-import { faTelegram } from '@fortawesome/free-brands-svg-icons';
+import { 
+  NURSING_LEVELS, 
+  CATEGORIES, 
+  StudentDocument // Use the one from types
+} from '../../types';
+import { Timestamp } from 'firebase/firestore';
+
+// Define additional interfaces for proper typing
+interface GradeEdit {
+  grade: number;
+  maxGrade: number;
+  feedback: string;
+}
 
 const StudentSidebar: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useAtom(selectedStudentForSidebarAtom);
@@ -58,11 +72,11 @@ const StudentSidebar: React.FC = () => {
   const [attendanceHistory, setAttendanceHistory] = useAtom(studentAttendanceHistoryAtom);
   const [newMessage, setNewMessage] = useAtom(newStudentMessageAtom);
 
-  // Local state
-  const [loading, setLoading] = useState(false);
-  const [sendingMessage, setSendingMessage] = useState(false);
+  // Local state with proper typing
+  const [loading, setLoading] = useState<boolean>(false);
+  const [sendingMessage, setSendingMessage] = useState<boolean>(false);
   const [editingDocument, setEditingDocument] = useState<string | null>(null);
-  const [editGrade, setEditGrade] = useState({ grade: 0, maxGrade: 100, feedback: '' });
+  const [editGrade, setEditGrade] = useState<GradeEdit>({ grade: 0, maxGrade: 100, feedback: '' });
 
   useEffect(() => {
     if (selectedStudent) {
@@ -70,7 +84,7 @@ const StudentSidebar: React.FC = () => {
     }
   }, [selectedStudent]);
 
-  const loadStudentData = async () => {
+  const loadStudentData = async (): Promise<void> => {
     if (!selectedStudent) return;
     
     setLoading(true);
@@ -82,43 +96,62 @@ const StudentSidebar: React.FC = () => {
         loadStudentAttendanceHistory(selectedStudent.studentId)
       ]);
 
-      setStudentDocuments(documents);
+      // Cast to proper types based on what the service actually returns
+      setStudentDocuments(documents as StudentDocument[]);
       setStudentMessages(messages);
       setAttendanceHistory(attendance);
 
-      // Calculate performance metrics
-      const gradedDocs = documents.filter(doc => doc.isGraded && doc.grade !== undefined && doc.maxGrade !== undefined);
-      const totalPoints = gradedDocs.reduce((sum, doc) => sum + (doc.grade || 0), 0);
-      const maxPoints = gradedDocs.reduce((sum, doc) => sum + (doc.maxGrade || 0), 0);
+      // Calculate performance metrics with proper type checking
+      const typedDocuments = documents as StudentDocument[];
+      const gradedDocs = typedDocuments.filter((doc): doc is StudentDocument & { grade: number; maxGrade: number } => 
+        doc.isGraded && typeof doc.grade === 'number' && typeof doc.maxGrade === 'number'
+      );
+      
+      const totalPoints = gradedDocs.reduce((sum, doc) => sum + doc.grade, 0);
+      const maxPoints = gradedDocs.reduce((sum, doc) => sum + doc.maxGrade, 0);
       const avgGrade = maxPoints > 0 ? (totalPoints / maxPoints) * 100 : 0;
 
       const presentDays = attendance.filter(record => record.present).length;
       const totalDays = attendance.length;
       const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 100;
 
+      // Get most recent activity
+      const recentActivity = typedDocuments.length > 0 
+        ? typedDocuments
+            .sort((a, b) => b.uploadedAt.seconds - a.uploadedAt.seconds)
+            .slice(0, 3)
+            .map(doc => ({
+              id: doc.id,
+              type: 'assignment' as const,
+              description: `Uploaded ${doc.name}`,
+              date: doc.uploadedAt.toDate(),
+              status: doc.isGraded ? 'completed' as const : 'pending' as const
+            }))
+        : [];
+
       setStudentPerformance({
         overallGrade: Math.round(avgGrade * 100) / 100,
         completedAssignments: gradedDocs.length,
-        totalAssignments: documents.length,
+        totalAssignments: typedDocuments.length,
         attendanceRate: Math.round(attendanceRate * 100) / 100,
-        recentActivity: documents.length > 0 ? documents[0].uploadedAt : null
+        recentActivity: recentActivity
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error loading student data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const closeSidebar = () => {
+  const closeSidebar = (): void => {
     setSelectedStudent(null);
     setActiveTab('details');
     setEditingDocument(null);
     setNewMessage('');
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (): Promise<void> => {
     if (!selectedStudent || !newMessage.trim()) return;
 
     setSendingMessage(true);
@@ -131,7 +164,7 @@ const StudentSidebar: React.FC = () => {
       setStudentMessages(messages);
       
       alert('Message sent successfully!');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
     } finally {
@@ -139,40 +172,40 @@ const StudentSidebar: React.FC = () => {
     }
   };
 
-  const handleUpdateGrade = async (documentId: string) => {
+  const handleUpdateGrade = async (documentId: string): Promise<void> => {
     try {
       await updateDocumentGrade(documentId, editGrade.grade, editGrade.maxGrade, editGrade.feedback);
       setEditingDocument(null);
       setEditGrade({ grade: 0, maxGrade: 100, feedback: '' });
       await loadStudentData(); // Reload to update performance
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error updating grade:', error);
       alert('Failed to update grade. Please try again.');
     }
   };
 
-  const handleDeleteDocument = async (document: StudentDocument) => {
+  const handleDeleteDocument = async (document: StudentDocument): Promise<void> => {
     if (!window.confirm(`Delete "${document.name}"?`)) return;
     
     try {
       await deleteDocument(document);
       await loadStudentData(); // Reload data
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error deleting document:', error);
       alert('Failed to delete document. Please try again.');
     }
   };
 
-  const handleToggleStar = async (document: StudentDocument) => {
+  const handleToggleStar = async (document: StudentDocument): Promise<void> => {
     try {
       await toggleDocumentStar(document.id, document.isStarred || false);
       await loadStudentData(); // Reload data
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error toggling star:', error);
     }
   };
 
-  const startGrading = (document: StudentDocument) => {
+  const startGrading = (document: StudentDocument): void => {
     setEditingDocument(document.id);
     setEditGrade({
       grade: document.grade || 0,
@@ -181,9 +214,19 @@ const StudentSidebar: React.FC = () => {
     });
   };
 
-  const cancelGrading = () => {
+  const cancelGrading = (): void => {
     setEditingDocument(null);
     setEditGrade({ grade: 0, maxGrade: 100, feedback: '' });
+  };
+
+  // Helper function to safely get date string from Timestamp
+  const getDateString = (timestamp: Timestamp | undefined): string => {
+    if (!timestamp) return 'Unknown date';
+    try {
+      return timestamp.toDate().toLocaleDateString();
+    } catch {
+      return 'Invalid date';
+    }
   };
 
   if (!selectedStudent) return null;
@@ -261,8 +304,8 @@ const StudentSidebar: React.FC = () => {
                       <span className="font-medium">{selectedStudent.email}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Nursing Level:</span>
-                      <span className="font-medium">{nursingLevel?.label}</span>
+                      <span className="text-gray-500">Level:</span>
+                      <span className="font-medium">{nursingLevel?.label || selectedStudent.nursingLevel}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Academic Year:</span>
@@ -289,7 +332,7 @@ const StudentSidebar: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Enrolled:</span>
-                      <span className="font-medium">{selectedStudent.createdAt?.toDate?.()?.toLocaleDateString()}</span>
+                      <span className="font-medium">{getDateString(selectedStudent.createdAt)}</span>
                     </div>
                   </div>
                 </div>
@@ -326,7 +369,7 @@ const StudentSidebar: React.FC = () => {
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Recent Attendance</h4>
                   <div className="space-y-2">
                     {attendanceHistory.slice(0, 5).map((record, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
+                      <div key={`${record.studentId}-${record.date}-${index}`} className="flex items-center justify-between text-sm">
                         <span className="text-gray-500">{record.date}</span>
                         <span className={`flex items-center font-medium ${
                           record.present ? 'text-green-600' : 'text-red-600'
@@ -386,20 +429,20 @@ const StudentSidebar: React.FC = () => {
                               
                               <div className="flex items-center space-x-3 text-xs text-gray-500 mb-2">
                                 <span className="px-2 py-1 bg-white rounded-full">
-                                  {CATEGORIES.find(c => c.value === document.category)?.label}
+                                  {CATEGORIES.find(c => c.value === document.category)?.label || document.category}
                                 </span>
                                 <span>{formatFileSize(document.size)}</span>
-                                <span>{document.uploadedAt?.toDate?.()?.toLocaleDateString()}</span>
+                                <span>{getDateString(document.uploadedAt)}</span>
                               </div>
 
                               {/* Grade Display */}
-                              {document.isGraded ? (
+                              {document.isGraded && typeof document.grade === 'number' && typeof document.maxGrade === 'number' ? (
                                 <div className="mb-2">
                                   <div className="flex items-center space-x-2">
                                     <FontAwesomeIcon icon={faAward} className="text-green-500 text-xs" />
                                     <span className="text-sm font-medium text-green-700">
                                       {document.grade}/{document.maxGrade} 
-                                      ({((document.grade! / document.maxGrade!) * 100).toFixed(1)}%)
+                                      ({((document.grade / document.maxGrade) * 100).toFixed(1)}%)
                                     </span>
                                   </div>
                                   {document.feedback && (
@@ -567,7 +610,7 @@ const StudentSidebar: React.FC = () => {
                                 {message.fromInstructor ? 'You' : selectedStudent.name}
                               </span>
                               <span className="text-xs text-gray-500">
-                                {message.createdAt?.toDate?.()?.toLocaleDateString()}
+                                {getDateString(message.createdAt)}
                               </span>
                             </div>
                             <p className="text-sm text-gray-800">{message.message}</p>
@@ -637,12 +680,14 @@ const StudentSidebar: React.FC = () => {
                   <div className="space-y-3">
                     {CATEGORIES.map(category => {
                       const categoryDocs = studentDocuments.filter(d => d.category === category.value);
-                      const gradedDocs = categoryDocs.filter(d => d.isGraded && d.grade !== undefined && d.maxGrade !== undefined);
+                      const gradedDocs = categoryDocs.filter((d): d is StudentDocument & { grade: number; maxGrade: number } => 
+                        d.isGraded && typeof d.grade === 'number' && typeof d.maxGrade === 'number'
+                      );
                       
                       if (categoryDocs.length === 0) return null;
                       
                       const avgGrade = gradedDocs.length > 0 
-                        ? gradedDocs.reduce((sum, doc) => sum + ((doc.grade! / doc.maxGrade!) * 100), 0) / gradedDocs.length
+                        ? gradedDocs.reduce((sum, doc) => sum + ((doc.grade / doc.maxGrade) * 100), 0) / gradedDocs.length
                         : 0;
 
                       return (
@@ -676,16 +721,16 @@ const StudentSidebar: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-medium text-gray-900 mb-3">Recent Activity</h4>
                   <div className="space-y-2">
-                    {/* Show most recent documents */}
-                    {studentDocuments.slice(0, 3).map(document => (
-                      <div key={document.id} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 truncate flex-1 mr-2">{document.name}</span>
-                        <span className="text-xs text-gray-500">
-                          {document.uploadedAt?.toDate?.()?.toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
-                    {studentDocuments.length === 0 && (
+                    {studentPerformance?.recentActivity && studentPerformance.recentActivity.length > 0 ? (
+                      studentPerformance.recentActivity.map((activity, index) => (
+                        <div key={`${activity.id}-${index}`} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700 truncate flex-1 mr-2">{activity.description}</span>
+                          <span className="text-xs text-gray-500">
+                            {activity.date.toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
                       <p className="text-gray-500 text-sm italic">No recent activity</p>
                     )}
                   </div>

@@ -1,4 +1,31 @@
-// Telegram service configuration for your local n8n setup
+// Define response interfaces
+interface TelegramIndividualResponse {
+  success: boolean;
+  message: string;
+  telegramMessageId?: number;
+  studentTelegramId?: string;
+  error?: string;
+}
+
+interface TelegramBulkResponse {
+  success: boolean;
+  message: string;
+  telegramMessageId?: number;
+  targetCount?: number;
+  error?: string;
+}
+
+interface TelegramBotSetupResponse {
+  success: boolean;
+  message: string;
+  ok?: boolean;
+  result?: boolean;
+  description?: string;
+  error_code?: number;
+  error?: string; // Add this line
+}
+
+// Telegram service configuration for TaycaroView local n8n setup
 const TELEGRAM_CONFIG = {
   individualWebhook: process.env.NEXT_PUBLIC_N8N_INDIVIDUAL_WEBHOOK || 'http://localhost:5678/webhook-test/telegram/individual',
   bulkWebhook: process.env.NEXT_PUBLIC_N8N_BULK_WEBHOOK || 'http://localhost:5678/webhook-test/telegram/bulk',
@@ -13,7 +40,7 @@ export const sendIndividualTelegramMessage = async (
   message: string,
   announcementId: string,
   urgent: boolean = false
-): Promise<any> => {
+): Promise<TelegramIndividualResponse> => {
   try {
     console.log('🔄 Sending individual message to n8n:', TELEGRAM_CONFIG.individualWebhook);
     
@@ -44,13 +71,19 @@ export const sendIndividualTelegramMessage = async (
       throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
+    const result = await response.json() as TelegramIndividualResponse;
     console.log('✅ Individual message response:', result);
     
     return result;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error sending individual Telegram message:', error);
-    throw error;
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: 'Failed to send individual message',
+      error: errorMessage
+    };
   }
 };
 
@@ -62,7 +95,7 @@ export const sendBulkTelegramAnnouncement = async (
   targetLevels: string[],
   targetStudents: string[],
   urgent: boolean = false
-): Promise<any> => {
+): Promise<TelegramBulkResponse> => {
   try {
     console.log('🔄 Sending bulk announcement to n8n:', TELEGRAM_CONFIG.bulkWebhook);
     
@@ -96,21 +129,30 @@ export const sendBulkTelegramAnnouncement = async (
       throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
+    const result = await response.json() as TelegramBulkResponse;
     console.log('✅ Bulk announcement response:', result);
     
     return result;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error sending bulk Telegram announcement:', error);
-    throw error;
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: 'Failed to send bulk announcement',
+      error: errorMessage
+    };
   }
 };
 
-export const setupTelegramBot = async (): Promise<any> => {
+export const setupTelegramBot = async (): Promise<TelegramBotSetupResponse> => {
   try {
     if (!TELEGRAM_CONFIG.botToken) {
       console.log('⚠️  No Telegram bot token configured');
-      return { success: false, message: 'No bot token configured' };
+      return { 
+        success: false, 
+        message: 'No bot token configured' 
+      };
     }
 
     // Set webhook for callback handling
@@ -129,12 +171,25 @@ export const setupTelegramBot = async (): Promise<any> => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result = await response.json() as Record<string, unknown>;
     console.log('✅ Telegram webhook setup:', result);
     
-    return result;
-  } catch (error) {
+    return {
+      success: result.ok as boolean || false,
+      message: result.description as string || 'Webhook setup completed',
+      ok: result.ok as boolean,
+      result: result.result as boolean,
+      description: result.description as string,
+      error_code: result.error_code as number
+    };
+  } catch (error: unknown) {
     console.error('❌ Error setting up Telegram bot:', error);
-    throw error;
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return {
+      success: false,
+      message: 'Failed to setup Telegram bot',
+      error: errorMessage
+    };
   }
 };

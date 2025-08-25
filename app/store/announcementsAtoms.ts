@@ -1,6 +1,20 @@
 import { atom } from 'jotai';
 import { Announcement } from '../types';
 
+// Define notification interface
+interface StudentNotification {
+  id: string;
+  studentId: string;
+  announcementId: string;
+  title: string;
+  message: string;
+  type: 'announcement' | 'message' | 'alert';
+  urgent: boolean;
+  read: boolean;
+  createdAt: Date;
+  readAt?: Date;
+}
+
 // Announcements Data
 export const announcementsAtom = atom<Announcement[]>([]);
 export const announcementsLoadingAtom = atom<boolean>(false);
@@ -31,4 +45,4 @@ export const sendingAnnouncementAtom = atom<boolean>(false);
 
 // Notification State
 export const unreadNotificationsAtom = atom<number>(0);
-export const studentNotificationsAtom = atom<any[]>([]);
+export const studentNotificationsAtom = atom<StudentNotification[]>([]);

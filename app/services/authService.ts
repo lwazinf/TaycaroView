@@ -19,18 +19,51 @@ import {
   collection,
   query,
   where,
-  getDocs
+  getDocs,
+  Timestamp
 } from 'firebase/firestore';
 import { auth, firestore } from '../utils/firebase';
 import { User, UserRole, LoginCredentials, RegisterData } from '../types/auth';
 
+// Error message mappings using Record
+const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
+  'auth/invalid-email': 'Invalid email address',
+  'auth/user-disabled': 'This account has been disabled',
+  'auth/user-not-found': 'No account found with this email',
+  'auth/wrong-password': 'Incorrect password',
+  'auth/too-many-requests': 'Too many failed attempts. Please try again later',
+  'auth/invalid-credential': 'Invalid email or password',
+  'auth/email-already-in-use': 'An account with this email already exists',
+  'auth/operation-not-allowed': 'Email/password accounts are not enabled',
+  'auth/weak-password': 'Password should be at least 6 characters'
+};
+
+// Helper function to get error messages
+const getFirebaseErrorMessage = (error: unknown): string => {
+  const errorRecord = error as Record<string, unknown>;
+  
+  if (typeof errorRecord.code === 'string' && errorRecord.code in FIREBASE_ERROR_MESSAGES) {
+    return FIREBASE_ERROR_MESSAGES[errorRecord.code];
+  }
+  
+  if (typeof errorRecord.message === 'string') {
+    return errorRecord.message;
+  }
+  
+  if (error instanceof Error) {
+    return error.message;
+  }
+  
+  return 'An unexpected error occurred';
+};
+
 // Helper function to clean undefined values from objects
-const cleanFirestoreData = (obj: any): any => {
-  const cleaned: any = {};
+const cleanFirestoreData = (obj: Record<string, unknown>): Record<string, unknown> => {
+  const cleaned: Record<string, unknown> = {};
   Object.keys(obj).forEach(key => {
     if (obj[key] !== undefined && obj[key] !== null) {
-      if (typeof obj[key] === 'object' && !Array.isArray(obj[key]) && obj[key].constructor === Object) {
-        const cleanedNested = cleanFirestoreData(obj[key]);
+      if (typeof obj[key] === 'object' && !Array.isArray(obj[key]) && obj[key]?.constructor === Object) {
+        const cleanedNested = cleanFirestoreData(obj[key] as Record<string, unknown>);
         if (Object.keys(cleanedNested).length > 0) {
           cleaned[key] = cleanedNested;
         }
@@ -83,9 +116,9 @@ export const createUserProfile = async (
     console.log('✅ User profile created in Firestore');
 
     return userProfile;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error creating user profile:', error);
-    throw error;
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
@@ -96,18 +129,18 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
     const userDoc = await getDoc(doc(firestore, 'users', uid));
     
     if (userDoc.exists()) {
-      const data = userDoc.data();
-      const userProfile = {
+      const data = userDoc.data() as Record<string, unknown>;
+      const userProfile: User = {
         uid: userDoc.id,
-        email: data.email || '',
-        displayName: data.displayName || '',
-        role: data.role || 'instructor',
-        institution: data.institution || '',
-        department: data.department || '',
-        createdAt: data.createdAt?.toDate() || new Date(),
-        lastLogin: data.lastLogin?.toDate() || new Date(),
-        isActive: data.isActive ?? true,
-        profileImage: data.profileImage || ''
+        email: (data.email as string) || '',
+        displayName: (data.displayName as string) || '',
+        role: (data.role as UserRole) || 'instructor',
+        institution: (data.institution as string) || '',
+        department: (data.department as string) || '',
+        createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+lastLogin: (data.lastLogin as Timestamp)?.toDate() || new Date(),
+        isActive: (data.isActive as boolean) ?? true,
+        profileImage: (data.profileImage as string) || ''
       };
       console.log('✅ User profile found:', userProfile);
       return userProfile;
@@ -115,7 +148,7 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
     
     console.log('⚠️ User document not found for uid:', uid);
     return null;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error getting user profile:', error);
     return null;
   }
@@ -142,15 +175,15 @@ export const ensureUserDocument = async (firebaseUser: FirebaseUser): Promise<Us
           lastLogin: serverTimestamp()
         });
         console.log('✅ Last login updated');
-      } catch (updateError) {
+      } catch (updateError: unknown) {
         console.warn('⚠️ Failed to update lastLogin:', updateError);
       }
     }
     
     return userProfile;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error ensuring user document:', error);
-    throw error;
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
@@ -182,25 +215,9 @@ export const loginUser = async (credentials: LoginCredentials): Promise<User> =>
 
     console.log('✅ Login completely successful');
     return userProfile;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Login error:', error);
-    
-    switch (error.code) {
-      case 'auth/invalid-email':
-        throw new Error('Invalid email address');
-      case 'auth/user-disabled':
-        throw new Error('This account has been disabled');
-      case 'auth/user-not-found':
-        throw new Error('No account found with this email');
-      case 'auth/wrong-password':
-        throw new Error('Incorrect password');
-      case 'auth/too-many-requests':
-        throw new Error('Too many failed attempts. Please try again later');
-      case 'auth/invalid-credential':
-        throw new Error('Invalid email or password');
-      default:
-        throw new Error(error.message || 'Login failed');
-    }
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
@@ -217,7 +234,7 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
         const userProfile = await ensureUserDocument(firebaseUser);
         console.log('✅ User profile retrieved/created:', userProfile.email);
         callback(userProfile);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Error in auth state change:', error);
         callback(null);
       }
@@ -228,7 +245,7 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
   });
 };
 
-// Rest of your functions remain the same...
+// Register user function
 export const registerUser = async (registerData: RegisterData): Promise<User> => {
   try {
     if (registerData.password !== registerData.confirmPassword) {
@@ -268,52 +285,35 @@ export const registerUser = async (registerData: RegisterData): Promise<User> =>
     });
 
     return userProfile;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration error:', error);
-    
-    switch (error.code) {
-      case 'auth/email-already-in-use':
-        throw new Error('An account with this email already exists');
-      case 'auth/invalid-email':
-        throw new Error('Invalid email address');
-      case 'auth/operation-not-allowed':
-        throw new Error('Email/password accounts are not enabled');
-      case 'auth/weak-password':
-        throw new Error('Password should be at least 6 characters');
-      default:
-        throw new Error(error.message || 'Registration failed');
-    }
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
+// Logout function
 export const logoutUser = async (): Promise<void> => {
   try {
     console.log('👋 Logging out user...');
     await signOut(auth);
     console.log('✅ User logged out successfully');
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Logout error:', error);
-    throw error;
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
+// Reset password function
 export const resetUserPassword = async (email: string): Promise<void> => {
   try {
     await sendPasswordResetEmail(auth, email);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Password reset error:', error);
-    
-    switch (error.code) {
-      case 'auth/invalid-email':
-        throw new Error('Invalid email address');
-      case 'auth/user-not-found':
-        throw new Error('No account found with this email');
-      default:
-        throw new Error('Failed to send password reset email');
-    }
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
+// Update user profile function
 export const updateUserProfile = async (uid: string, data: Partial<User>): Promise<void> => {
   try {
     const cleanedData = cleanFirestoreData({
@@ -328,12 +328,13 @@ export const updateUserProfile = async (uid: string, data: Partial<User>): Promi
         displayName: data.displayName
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Profile update error:', error);
-    throw error;
+    throw new Error(getFirebaseErrorMessage(error));
   }
 };
 
+// Check user role function
 export const checkUserRole = (user: User | null, requiredRoles: UserRole[]): boolean => {
   if (!user) return false;
   return requiredRoles.includes(user.role);

@@ -11,12 +11,34 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
-  limit
+  limit,
+  Timestamp
 } from 'firebase/firestore';
 import { firestore } from '../utils/firebase';
 import { NursingStudent, AttendanceRecord, AttendanceList, StudentMessage, DailyAttendance, AttendanceView } from '../types';
 import { formatDateForId } from '../utils/helpers';
 export { loadStudentDocuments } from '../services/documentsService';
+
+// Helper function to handle Firestore data conversion
+const convertFirestoreData = (data: Record<string, unknown>): Partial<NursingStudent> => {
+  return {
+    studentId: data.studentId as string,
+    name: data.name as string,
+    email: data.email as string,
+    academicYear: data.academicYear as string,
+    nursingLevel: data.nursingLevel as string,
+    createdAt: data.createdAt as Timestamp,
+    telegramId: data.telegramId as string,
+    phoneNumber: data.phoneNumber as string,
+    clinicalRotation: data.clinicalRotation as string,
+    overallGrade: (data.overallGrade as number) || 0,
+    completedAssignments: (data.completedAssignments as number) || 0,
+    totalAssignments: (data.totalAssignments as number) || 0,
+    attendanceRate: (data.attendanceRate as number) || 0,
+    lastActive: data.lastActive as Timestamp,
+    profileImage: data.profileImage as string
+  };
+};
 
 export const loadStudents = async (): Promise<NursingStudent[]> => {
   try {
@@ -25,24 +47,26 @@ export const loadStudents = async (): Promise<NursingStudent[]> => {
     const loadedStudents: NursingStudent[] = [];
     
     snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
+      const data = docSnap.data() as Record<string, unknown>;
+      const studentData = convertFirestoreData(data);
+      
       loadedStudents.push({
         id: docSnap.id,
-        studentId: data.studentId,
-        name: data.name,
-        email: data.email,
-        academicYear: data.academicYear,
-        nursingLevel: data.nursingLevel,
-        createdAt: data.createdAt,
-        telegramId: data.telegramId,
-        phoneNumber: data.phoneNumber,
-        clinicalRotation: data.clinicalRotation,
-        overallGrade: data.overallGrade || 0,
-        completedAssignments: data.completedAssignments || 0,
-        totalAssignments: data.totalAssignments || 0,
-        attendanceRate: data.attendanceRate || 0,
-        lastActive: data.lastActive,
-        profileImage: data.profileImage
+        studentId: studentData.studentId!,
+        name: studentData.name!,
+        email: studentData.email!,
+        academicYear: studentData.academicYear!,
+        nursingLevel: studentData.nursingLevel!,
+        createdAt: studentData.createdAt!,
+        telegramId: studentData.telegramId!,
+        phoneNumber: studentData.phoneNumber!,
+        clinicalRotation: studentData.clinicalRotation!,
+        overallGrade: studentData.overallGrade!,
+        completedAssignments: studentData.completedAssignments!,
+        totalAssignments: studentData.totalAssignments!,
+        attendanceRate: studentData.attendanceRate!,
+        lastActive: studentData.lastActive!,
+        profileImage: studentData.profileImage!
       });
     });
     
@@ -59,13 +83,25 @@ export const loadStudents = async (): Promise<NursingStudent[]> => {
     );
     
     return studentsWithCounts;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error loading students:', error);
     throw error;
   }
 };
 
-export const addStudent = async (studentData: any): Promise<void> => {
+// Define the student data interface for adding
+interface AddStudentData {
+  studentId: string;
+  name: string;
+  email: string;
+  academicYear: string;
+  nursingLevel: string;
+  telegramId?: string;
+  phoneNumber?: string;
+  clinicalRotation?: string;
+}
+
+export const addStudent = async (studentData: AddStudentData): Promise<void> => {
   try {
     await addDoc(collection(firestore, 'nursingStudents'), {
       ...studentData,
@@ -75,7 +111,7 @@ export const addStudent = async (studentData: any): Promise<void> => {
       totalAssignments: 0,
       attendanceRate: 100
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error adding student:', error);
     throw error;
   }
@@ -87,7 +123,7 @@ export const loadTodaysAttendance = async (date: string): Promise<{ attendance: 
     
     const attendanceListDoc = await getDoc(doc(firestore, 'admin', `attendance_${formattedDate}`));
     
-    if (attendanceListDoc.exists() && attendanceListDoc.data().isFinalized) {
+    if (attendanceListDoc.exists() && (attendanceListDoc.data() as Record<string, unknown>).isFinalized) {
       const attendanceList = attendanceListDoc.data() as AttendanceList;
       const attendanceData: DailyAttendance = {};
       
@@ -120,7 +156,7 @@ export const loadTodaysAttendance = async (date: string): Promise<{ attendance: 
         records: records
       };
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error loading attendance:', error);
     throw error;
   }
@@ -140,10 +176,10 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
     // Try to get attendance data from admin collection first
     const attendanceListDoc = await getDoc(doc(firestore, 'admin', `attendance_${formattedDate}`));
     
-    let presentStudents: NursingStudent[] = [];
-    let absentStudents: NursingStudent[] = [];
+    const presentStudents: NursingStudent[] = [];
+    const absentStudents: NursingStudent[] = [];
     let takenBy = '';
-    let submittedAt: any;
+    let submittedAt: Timestamp | undefined;
 
     if (attendanceListDoc.exists()) {
       // Use finalized attendance data
@@ -151,7 +187,7 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
       takenBy = attendanceList.takenBy;
       submittedAt = attendanceList.submittedAt;
 
-      const attendanceMap: { [key: string]: boolean } = {};
+      const attendanceMap: Record<string, boolean> = {};
       attendanceList.attendanceRecords.forEach(record => {
         attendanceMap[record.studentId] = record.present;
       });
@@ -171,7 +207,7 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
       );
       const snapshot = await getDocs(q);
       
-      const attendanceMap: { [key: string]: boolean } = {};
+      const attendanceMap: Record<string, boolean> = {};
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as AttendanceRecord;
         attendanceMap[data.studentId] = data.present;
@@ -203,7 +239,7 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
       takenBy,
       submittedAt
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error loading attendance view:', error);
     throw error;
   }
@@ -217,12 +253,12 @@ export const toggleAttendance = async (studentId: string, date: string, newStatu
       studentId: studentId,
       date: date,
       present: newStatus,
-      markedAt: serverTimestamp() as any,
+      markedAt: serverTimestamp() as Timestamp,
       markedBy: 'instructor'
     };
 
     await setDoc(doc(firestore, 'attendance', attendanceId), attendanceData);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating attendance:', error);
     throw error;
   }
@@ -246,7 +282,7 @@ export const submitAttendanceList = async (
         studentId: student.studentId,
         date: date,
         present: isPresent,
-        markedAt: serverTimestamp() as any,
+        markedAt: serverTimestamp() as Timestamp,
         markedBy: 'instructor'
       });
       
@@ -261,7 +297,7 @@ export const submitAttendanceList = async (
       id: `attendance_${formattedDate}`,
       date: formattedDate,
       takenBy: 'instructor',
-      submittedAt: serverTimestamp() as any,
+      submittedAt: serverTimestamp() as Timestamp,
       totalStudents: students.length,
       presentCount: presentCount,
       absentCount: absentCount,
@@ -270,7 +306,7 @@ export const submitAttendanceList = async (
     };
 
     await setDoc(doc(firestore, 'admin', `attendance_${formattedDate}`), attendanceList);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error submitting attendance list:', error);
     throw error;
   }
@@ -292,7 +328,7 @@ export const loadStudentAttendanceHistory = async (studentId: string): Promise<A
     });
     
     return history;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error loading student attendance:', error);
     throw error;
   }
@@ -309,20 +345,20 @@ export const loadStudentMessages = async (studentId: string): Promise<StudentMes
     const messages: StudentMessage[] = [];
     
     snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
+      const data = docSnap.data() as Record<string, unknown>;
       messages.push({
         id: docSnap.id,
-        studentId: data.studentId,
-        fromInstructor: data.fromInstructor,
-        message: data.message,
-        createdAt: data.createdAt,
-        read: data.read,
-        urgent: data.urgent
+        studentId: data.studentId as string,
+        fromInstructor: data.fromInstructor as boolean,
+        message: data.message as string,
+        createdAt: data.createdAt as Timestamp,
+        read: data.read as boolean,
+        urgent: data.urgent as boolean
       });
     });
     
     return messages;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error loading student messages:', error);
     throw error;
   }
@@ -338,7 +374,7 @@ export const sendMessageToStudent = async (studentId: string, message: string): 
       read: false,
       urgent: false
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error sending message:', error);
     throw error;
   }
