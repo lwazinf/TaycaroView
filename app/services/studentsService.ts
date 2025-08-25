@@ -50,35 +50,44 @@ export const loadStudents = async (): Promise<NursingStudent[]> => {
       const data = docSnap.data() as Record<string, unknown>;
       const studentData = convertFirestoreData(data);
       
-      loadedStudents.push({
-        id: docSnap.id,
-        studentId: studentData.studentId!,
-        name: studentData.name!,
-        email: studentData.email!,
-        academicYear: studentData.academicYear!,
-        nursingLevel: studentData.nursingLevel!,
-        createdAt: studentData.createdAt!,
-        telegramId: studentData.telegramId!,
-        phoneNumber: studentData.phoneNumber!,
-        clinicalRotation: studentData.clinicalRotation!,
-        overallGrade: studentData.overallGrade!,
-        completedAssignments: studentData.completedAssignments!,
-        totalAssignments: studentData.totalAssignments!,
-        attendanceRate: studentData.attendanceRate!,
-        lastActive: studentData.lastActive!,
-        profileImage: studentData.profileImage!
-      });
+      // Only push if required fields exist
+      if (studentData.studentId && studentData.name && studentData.email && 
+          studentData.academicYear && studentData.nursingLevel && studentData.createdAt) {
+        loadedStudents.push({
+          id: docSnap.id,
+          studentId: studentData.studentId,
+          name: studentData.name,
+          email: studentData.email,
+          academicYear: studentData.academicYear,
+          nursingLevel: studentData.nursingLevel,
+          createdAt: studentData.createdAt,
+          telegramId: studentData.telegramId,
+          phoneNumber: studentData.phoneNumber,
+          clinicalRotation: studentData.clinicalRotation,
+          overallGrade: studentData.overallGrade,
+          completedAssignments: studentData.completedAssignments,
+          totalAssignments: studentData.totalAssignments,
+          attendanceRate: studentData.attendanceRate,
+          lastActive: studentData.lastActive,
+          profileImage: studentData.profileImage
+        });
+      }
     });
     
     // Get document counts
     const studentsWithCounts = await Promise.all(
       loadedStudents.map(async (student) => {
-        const docQuery = query(
-          collection(firestore, 'studentDocuments'),
-          where('studentId', '==', student.studentId)
-        );
-        const docSnapshot = await getDocs(docQuery);
-        return { ...student, documentCount: docSnapshot.size };
+        try {
+          const docQuery = query(
+            collection(firestore, 'studentDocuments'),
+            where('studentId', '==', student.studentId)
+          );
+          const docSnapshot = await getDocs(docQuery);
+          return { ...student, documentCount: docSnapshot.size };
+        } catch (error: unknown) {
+          console.error(`Error loading document count for student ${student.studentId}:`, error);
+          return { ...student, documentCount: 0 };
+        }
       })
     );
     
@@ -109,7 +118,8 @@ export const addStudent = async (studentData: AddStudentData): Promise<void> => 
       overallGrade: 0,
       completedAssignments: 0,
       totalAssignments: 0,
-      attendanceRate: 100
+      attendanceRate: 100,
+      profileImage: ''
     });
   } catch (error: unknown) {
     console.error('Error adding student:', error);
@@ -123,39 +133,70 @@ export const loadTodaysAttendance = async (date: string): Promise<{ attendance: 
     
     const attendanceListDoc = await getDoc(doc(firestore, 'admin', `attendance_${formattedDate}`));
     
-    if (attendanceListDoc.exists() && (attendanceListDoc.data() as Record<string, unknown>).isFinalized) {
-      const attendanceList = attendanceListDoc.data() as AttendanceList;
-      const attendanceData: DailyAttendance = {};
-      
-      attendanceList.attendanceRecords.forEach(record => {
-        attendanceData[record.studentId] = record.present;
-      });
-      
-      return {
-        attendance: attendanceData,
-        records: attendanceList.attendanceRecords
-      };
-    } else {
-      const q = query(
-        collection(firestore, 'attendance'),
-        where('date', '==', date)
-      );
-      const snapshot = await getDocs(q);
-      
-      const attendanceData: DailyAttendance = {};
-      const records: AttendanceRecord[] = [];
-      
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as AttendanceRecord;
-        attendanceData[data.studentId] = data.present;
-        records.push({ ...data, id: docSnap.id });
-      });
-      
-      return {
-        attendance: attendanceData,
-        records: records
-      };
+    if (attendanceListDoc.exists()) {
+      const data = attendanceListDoc.data() as Record<string, unknown>;
+      if (data.isFinalized) {
+        // Properly convert the data to AttendanceList type
+        const attendanceList: AttendanceList = {
+          id: data.id as string,
+          date: data.date as string,
+          takenBy: data.takenBy as string,
+          submittedAt: data.submittedAt as Timestamp,
+          totalStudents: data.totalStudents as number,
+          presentCount: data.presentCount as number,
+          absentCount: data.absentCount as number,
+          attendanceRecords: (data.attendanceRecords as Record<string, unknown>[]).map(record => ({
+            id: record.id as string | undefined,
+            studentId: record.studentId as string,
+            date: record.date as string,
+            present: record.present as boolean,
+            markedAt: record.markedAt as Timestamp,
+            markedBy: record.markedBy as string
+          })),
+          isFinalized: data.isFinalized as boolean
+        };
+
+        const attendanceData: DailyAttendance = {};
+        
+        attendanceList.attendanceRecords.forEach(record => {
+          attendanceData[record.studentId] = record.present;
+        });
+        
+        return {
+          attendance: attendanceData,
+          records: attendanceList.attendanceRecords
+        };
+      }
     }
+    
+    // Fallback to individual records
+    const q = query(
+      collection(firestore, 'attendance'),
+      where('date', '==', date)
+    );
+    const snapshot = await getDocs(q);
+    
+    const attendanceData: DailyAttendance = {};
+    const records: AttendanceRecord[] = [];
+    
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      const record: AttendanceRecord = {
+        id: docSnap.id,
+        studentId: data.studentId as string,
+        date: data.date as string,
+        present: data.present as boolean,
+        markedAt: data.markedAt as Timestamp,
+        markedBy: data.markedBy as string
+      };
+      attendanceData[record.studentId] = record.present;
+      records.push(record);
+    });
+    
+    return {
+      attendance: attendanceData,
+      records: records
+    };
   } catch (error: unknown) {
     console.error('Error loading attendance:', error);
     throw error;
@@ -183,7 +224,28 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
 
     if (attendanceListDoc.exists()) {
       // Use finalized attendance data
-      const attendanceList = attendanceListDoc.data() as AttendanceList;
+      const data = attendanceListDoc.data() as Record<string, unknown>;
+      
+      // Properly convert the data to AttendanceList type
+      const attendanceList: AttendanceList = {
+        id: data.id as string,
+        date: data.date as string,
+        takenBy: data.takenBy as string,
+        submittedAt: data.submittedAt as Timestamp,
+        totalStudents: data.totalStudents as number,
+        presentCount: data.presentCount as number,
+        absentCount: data.absentCount as number,
+        attendanceRecords: (data.attendanceRecords as Record<string, unknown>[]).map(record => ({
+          id: record.id as string | undefined,
+          studentId: record.studentId as string,
+          date: record.date as string,
+          present: record.present as boolean,
+          markedAt: record.markedAt as Timestamp,
+          markedBy: record.markedBy as string
+        })),
+        isFinalized: data.isFinalized as boolean
+      };
+
       takenBy = attendanceList.takenBy;
       submittedAt = attendanceList.submittedAt;
 
@@ -209,10 +271,18 @@ export const loadAttendanceViewData = async (date: string, students: NursingStud
       
       const attendanceMap: Record<string, boolean> = {};
       snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as AttendanceRecord;
-        attendanceMap[data.studentId] = data.present;
-        if (!takenBy && data.markedBy) {
-          takenBy = data.markedBy;
+        const data = docSnap.data() as Record<string, unknown>;
+        const record: AttendanceRecord = {
+          id: docSnap.id,
+          studentId: data.studentId as string,
+          date: data.date as string,
+          present: data.present as boolean,
+          markedAt: data.markedAt as Timestamp,
+          markedBy: data.markedBy as string
+        };
+        attendanceMap[record.studentId] = record.present;
+        if (!takenBy && record.markedBy) {
+          takenBy = record.markedBy;
         }
       });
 
@@ -249,7 +319,7 @@ export const toggleAttendance = async (studentId: string, date: string, newStatu
   try {
     const attendanceId = `${studentId}_${date}`;
     
-    const attendanceData: AttendanceRecord = {
+    const attendanceData: Omit<AttendanceRecord, 'id'> = {
       studentId: studentId,
       date: date,
       present: newStatus,
@@ -323,8 +393,16 @@ export const loadStudentAttendanceHistory = async (studentId: string): Promise<A
     const snapshot = await getDocs(q);
     
     const history: AttendanceRecord[] = [];
-    snapshot.forEach((doc) => {
-      history.push({ ...doc.data() as AttendanceRecord, id: doc.id });
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      history.push({
+        id: docSnap.id,
+        studentId: data.studentId as string,
+        date: data.date as string,
+        present: data.present as boolean,
+        markedAt: data.markedAt as Timestamp,
+        markedBy: data.markedBy as string
+      });
     });
     
     return history;
@@ -353,7 +431,7 @@ export const loadStudentMessages = async (studentId: string): Promise<StudentMes
         message: data.message as string,
         createdAt: data.createdAt as Timestamp,
         read: data.read as boolean,
-        urgent: data.urgent as boolean
+        urgent: (data.urgent as boolean) || false
       });
     });
     
@@ -379,3 +457,6 @@ export const sendMessageToStudent = async (studentId: string, message: string): 
     throw error;
   }
 };
+
+// Remove unused imports - deleteDoc and updateDoc are imported but never used
+// If you need them later, you can add them back
