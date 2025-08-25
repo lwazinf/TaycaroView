@@ -44,9 +44,13 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onBackToLogin }
       await resetPassword(email);
       setSuccess(true);
       setEmailSent(true);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
+    } catch (error: unknown) {
+  if (error instanceof Error) {
+    setError(error.message);
+  } else {
+    setError('An unexpected error occurred');
+  }
+}  finally {
       setLoading(false);
     }
   };
@@ -58,9 +62,13 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onBackToLogin }
     try {
       await resetPassword(email);
       setSuccess(true);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
+    } catch (error: unknown) {
+  if (error instanceof Error) {
+    setError(error.message);
+  } else {
+    setError('An unexpected error occurred');
+  }
+} finally {
       setLoading(false);
     }
   };

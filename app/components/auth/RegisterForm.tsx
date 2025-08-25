@@ -61,9 +61,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) => {
         formData.institution,
         formData.department
       );
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
+    } catch (error: unknown) {
+  if (error instanceof Error) {
+    setError(error.message);
+  } else {
+    setError('An unexpected error occurred');
+  }
+} finally {
       setLoading(false);
     }
   };

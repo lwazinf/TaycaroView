@@ -51,10 +51,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
 
     try {
       await login(formData.email.trim(), formData.password, formData.rememberMe);
-    } catch (error: any) {
-      console.error('Login error:', error);
-      setError(error.message || 'An error occurred during login');
-    } finally {
+    } catch (error: unknown) {
+  if (error instanceof Error) {
+    setError(error.message);
+  } else {
+    setError('An unexpected error occurred');
+  }
+} finally {
       setLoading(false);
     }
   };

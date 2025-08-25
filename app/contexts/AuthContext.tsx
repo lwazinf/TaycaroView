@@ -1,21 +1,21 @@
-'use client'
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AuthContextType, User, UserRole } from '../types/auth';
+"use client";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { AuthContextType, User, UserRole } from "../types/auth";
 import {
   loginUser,
   registerUser,
   logoutUser,
   resetUserPassword,
   updateUserProfile,
-  onAuthStateChange
-} from '../services/authService';
+  onAuthStateChange,
+} from "../services/authService";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -37,7 +37,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  const login = async (email: string, password: string, rememberMe?: boolean): Promise<void> => {
+  const login = async (
+    email: string,
+    password: string,
+    rememberMe?: boolean
+  ): Promise<void> => {
     setLoading(true);
     try {
       const loggedInUser = await loginUser({ email, password, rememberMe });
@@ -53,19 +57,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (
     email: string,
     password: string,
+    confirmPassword: string,
     displayName: string,
-    role: UserRole
+    role: UserRole,
+    institution?: string,
+    department?: string
   ): Promise<void> => {
     setLoading(true);
     try {
       const registeredUser = await registerUser({
         email,
         password,
-        confirmPassword: password, // Assume password is confirmed at UI level
+        confirmPassword,
         displayName,
         role,
-        institution: '',
-        department: ''
+        institution: institution || "",
+        department: department || "",
       });
       setUser(registeredUser);
       setLoading(false);
@@ -81,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await logoutUser();
       setUser(null);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     } finally {
       setLoading(false);
     }
@@ -92,10 +99,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const updateProfile = async (data: Partial<User>): Promise<void> => {
-    if (!user) throw new Error('No user logged in');
-    
+    if (!user) throw new Error("No user logged in");
+
     await updateUserProfile(user.uid, data);
-    setUser(prev => prev ? { ...prev, ...data } : null);
+    setUser((prev) => (prev ? { ...prev, ...data } : null));
   };
 
   const value: AuthContextType = {
@@ -105,12 +112,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     resetPassword,
-    updateProfile
+    updateProfile,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

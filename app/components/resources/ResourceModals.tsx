@@ -15,7 +15,7 @@ import { showModalAtom, modalTypeAtom } from '../../store/atoms';
 import { 
   newResourceAtom, 
   resourceUploadingAtom,
-  studyResourcesAtom
+  studyResourcesAtom 
 } from '../../store/resourcesAtoms';
 import { uploadStudyResource, loadStudyResources } from '../../services/resourcesService';
 import { RESOURCE_CATEGORIES, NURSING_LEVELS, CLINICAL_ROTATIONS } from '../../types';
@@ -85,14 +85,16 @@ const ResourceModals: React.FC = () => {
         });
       }, 200);
 
-      await uploadStudyResource({
-        title: newResource.title,
-        description: newResource.description,
-        category: newResource.category,
-        targetLevels: newResource.targetLevels,
-        targetRotations: newResource.targetRotations,
-        file: newResource.files![0]
-      });
+      await uploadStudyResource(
+  {
+    title: newResource.title,
+    description: newResource.description,
+    category: newResource.category,
+    targetLevels: newResource.targetLevels,
+    targetRotations: newResource.targetRotations,
+  },
+  newResource.files![0]  // Pass file as separate argument
+);
       
       clearInterval(progressInterval);
       setUploadProgress(100);

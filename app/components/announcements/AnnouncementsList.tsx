@@ -91,7 +91,7 @@ const AnnouncementsList: React.FC = () => {
     if (!window.confirm("Resend this announcement to all recipients?")) return;
 
     try {
-      await resendAnnouncement(announcement.id);
+      await resendAnnouncement(announcement);
       alert("Announcement has been resent successfully!");
       await loadAnnouncementsData();
     } catch (error) {
@@ -275,7 +275,7 @@ const AnnouncementsList: React.FC = () => {
             </div>
             <div className="text-xs text-yellow-600">Unread</div>
           </div>
-        </div>
+        </div> 
 
         {/* Telegram Status */}
         <div className="mt-4 flex items-center justify-center p-3 bg-green-50 rounded-lg border border-green-200">

@@ -46,4 +46,4 @@ export interface RegisterData {
   role: UserRole;
   institution?: string;
   department?: string;
-}
+} 

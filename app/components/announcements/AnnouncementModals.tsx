@@ -261,10 +261,10 @@ const AnnouncementModals: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Target Audience</label>
                 <select
                   value={newAnnouncement.targetAudience}
-                  onChange={(e) => setNewAnnouncement(prev => ({...prev, targetAudience: e.target.value as any}))}
+                  onChange={(e) => setNewAnnouncement(prev => ({...prev, targetAudience: e.target.value as 'all' | 'level' | 'individual'}))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   disabled={sendingAnnouncement}
-                >
+                > 
                   <option value="all">All Students</option>
                   <option value="level">Specific Nursing Levels</option>
                   <option value="individual">Individual Students</option>

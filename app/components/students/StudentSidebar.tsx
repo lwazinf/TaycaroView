@@ -14,7 +14,7 @@ import {
   faAward,
   faClock,
   faCheckCircle,
-  faTimesCircle,
+  faTimesCircle, 
   faEnvelope,
   faPaperPlane,
   faGraduationCap,
