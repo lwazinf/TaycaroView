@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { SetStateAction, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -36,7 +36,7 @@ import {
   loadAttendanceViewData
 } from '../../services/studentsService';
 import { getStudentInitials, getAvatarColor } from '../../utils/helpers';
-import { NURSING_LEVELS } from '../../types';
+import { NURSING_LEVELS, NursingStudent } from '../../types';
 import { faTelegram } from '@fortawesome/free-brands-svg-icons';
 
 const StudentsList: React.FC = () => {
@@ -104,7 +104,7 @@ const StudentsList: React.FC = () => {
     }
   };
 
-  const loadStudentDetails = (student: any) => {
+  const loadStudentDetails = (student: SetStateAction<NursingStudent | null>) => {
     if (!showAttendanceMode) {
       setSelectedStudentForSidebar(student);
     }

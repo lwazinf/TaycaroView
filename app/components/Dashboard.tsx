@@ -23,7 +23,6 @@ import {
   faSave,
   faCalendar,
   faSort,
-  faStarSolid,
   faEye,
   faPaperPlane,
   faBell,
@@ -229,8 +228,8 @@ const NursingStudentManagement: React.FC = () => {
       // Try to get attendance data from admin collection first
       const attendanceListDoc = await getDoc(doc(firestore, 'admin', `attendance_${formattedDate}`));
       
-      let presentStudents: NursingStudent[] = [];
-      let absentStudents: NursingStudent[] = [];
+      const presentStudents: NursingStudent[] = [];
+      const absentStudents: NursingStudent[] = [];
       let takenBy = '';
       let submittedAt: Timestamp | undefined;
 
