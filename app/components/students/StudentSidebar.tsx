@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAtom } from 'jotai';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -7,19 +7,12 @@ import {
   faFileAlt,
   faComments,
   faChartLine,
-  faCalendarCheck,
   faSpinner,
   faEye,
-  faDownload,
   faAward,
-  faClock,
   faCheckCircle,
-  faTimesCircle, 
-  faEnvelope,
+  faTimesCircle,
   faPaperPlane,
-  faGraduationCap,
-  faPhone,
-  faCalendar,
   faEdit,
   faTrash,
   faStar as faStarSolid,
@@ -34,8 +27,7 @@ import {
   studentDocumentsAtom,
   studentPerformanceAtom,
   studentAttendanceHistoryAtom,
-  newStudentMessageAtom,
-  StudentPerformance // Use the one from atoms
+  newStudentMessageAtom
 } from '../../store/studentsAtoms';
 import { 
   loadStudentDocuments,
@@ -52,7 +44,7 @@ import { getStudentInitials, getAvatarColor, formatFileSize } from '../../utils/
 import { 
   NURSING_LEVELS, 
   CATEGORIES, 
-  StudentDocument // Use the one from types
+  StudentDocument
 } from '../../types';
 import { Timestamp } from 'firebase/firestore';
 
@@ -78,13 +70,7 @@ const StudentSidebar: React.FC = () => {
   const [editingDocument, setEditingDocument] = useState<string | null>(null);
   const [editGrade, setEditGrade] = useState<GradeEdit>({ grade: 0, maxGrade: 100, feedback: '' });
 
-  useEffect(() => {
-    if (selectedStudent) {
-      loadStudentData();
-    }
-  }, [selectedStudent]);
-
-  const loadStudentData = async (): Promise<void> => {
+  const loadStudentData = useCallback(async (): Promise<void> => {
     if (!selectedStudent) return;
     
     setLoading(true);
@@ -142,7 +128,13 @@ const StudentSidebar: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStudent, setStudentDocuments, setStudentMessages, setAttendanceHistory, setStudentPerformance]);
+
+  useEffect(() => {
+    if (selectedStudent) {
+      loadStudentData();
+    }
+  }, [selectedStudent, loadStudentData]);
 
   const closeSidebar = (): void => {
     setSelectedStudent(null);

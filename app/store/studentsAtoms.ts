@@ -1,10 +1,14 @@
 import { atom } from 'jotai';
-import { NursingStudent, AttendanceRecord, DailyAttendance, AttendanceView, StudentMessage } from '../types';
-import { StudentDocument } from '../types';
+import { 
+  NursingStudent, 
+  AttendanceRecord, 
+  DailyAttendance, 
+  AttendanceView, 
+  StudentMessage, 
+  StudentDocument 
+} from '../types';
 
 // Define interfaces for typed data
-export const studentDocumentsAtom = atom<StudentDocument[]>([]);
-
 export interface RecentActivity {
   id: string;
   type: 'assignment' | 'attendance' | 'grade' | 'message';
@@ -43,7 +47,7 @@ export const attendanceViewLoadingAtom = atom<boolean>(false);
 export const selectedStudentForSidebarAtom = atom<NursingStudent | null>(null);
 export const sidebarActiveTabAtom = atom<string>('details');
 export const studentMessagesAtom = atom<StudentMessage[]>([]);
-// export const studentDocumentsAtom = atom<StudentDocument[]>([]);
+export const studentDocumentsAtom = atom<StudentDocument[]>([]);
 export const studentPerformanceAtom = atom<StudentPerformance | null>(null);
 export const studentAttendanceHistoryAtom = atom<AttendanceRecord[]>([]);
 export const newStudentMessageAtom = atom<string>('');
